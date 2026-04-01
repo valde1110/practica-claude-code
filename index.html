@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard FIRE Personal</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3d;
+      --accent:   #6c63ff;
+      --green:    #22c55e;
+      --red:      #f43f5e;
+      --amber:    #f59e0b;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --radius:   12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+
+    /* ── Header ───────────────────────────────────────── */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin-bottom: 1.5rem;
+    }
+    header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -.5px; }
+    header h1 span { color: var(--accent); }
+    .badge {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: .25rem .75rem;
+      font-size: .75rem;
+      color: var(--muted);
+    }
+
+    /* ── Inputs row ───────────────────────────────────── */
+    .inputs-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: .75rem;
+      margin-bottom: 1.5rem;
+    }
+    .input-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: .75rem 1rem;
+    }
+    .input-card label {
+      display: block;
+      font-size: .7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: .3rem;
+    }
+    .input-card input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 600;
+      font-family: inherit;
+    }
+    .input-card input::-webkit-inner-spin-button { display: none; }
+
+    /* ── KPI cards ────────────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: .75rem;
+      margin-bottom: 1.5rem;
+    }
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .kpi.green::before  { background: var(--green); }
+    .kpi.red::before    { background: var(--red); }
+    .kpi.amber::before  { background: var(--amber); }
+    .kpi.accent::before { background: var(--accent); }
+
+    .kpi-label  { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
+    .kpi-value  { font-size: 1.5rem; font-weight: 700; line-height: 1; }
+    .kpi-sub    { font-size: .75rem; color: var(--muted); margin-top: .3rem; }
+
+    /* ── 2-col layout ─────────────────────────────────── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .75rem;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* ── Card ─────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.2rem;
+    }
+    .card-title {
+      font-size: .8rem;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    /* ── Cash flow rows ───────────────────────────────── */
+    .cf-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: .45rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .9rem;
+    }
+    .cf-row:last-child { border-bottom: none; }
+    .cf-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: .5rem;
+      flex-shrink: 0;
+    }
+    .cf-label { display: flex; align-items: center; color: var(--muted); }
+    .cf-amount { font-weight: 600; }
+    .cf-row.total .cf-label { color: var(--text); font-weight: 700; }
+    .cf-row.total .cf-amount { font-size: 1.05rem; }
+    .cf-divider { border-top: 1px solid var(--border); margin: .5rem 0; }
+
+    /* ── FIRE progress ────────────────────────────────── */
+    .fire-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: .82rem;
+      color: var(--muted);
+      margin-bottom: .5rem;
+    }
+    .progress-track {
+      background: var(--border);
+      border-radius: 99px;
+      height: 14px;
+      overflow: hidden;
+      margin-bottom: .6rem;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+      transition: width .6s ease;
+      min-width: 4px;
+    }
+    .fire-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .5rem;
+      margin-top: .75rem;
+    }
+    .fire-stat { font-size: .78rem; color: var(--muted); }
+    .fire-stat strong { display: block; font-size: 1rem; color: var(--text); }
+
+    /* ── Chart ────────────────────────────────────────── */
+    .chart-wrap {
+      position: relative;
+      height: 220px;
+    }
+
+    /* ── Milestones ───────────────────────────────────── */
+    .milestones { display: flex; flex-direction: column; gap: .5rem; }
+    .milestone {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .5rem .75rem;
+      border-radius: 8px;
+      font-size: .85rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+    .m-icon { font-size: 1.1rem; }
+    .m-label { flex: 1; color: var(--muted); }
+    .m-value { font-weight: 700; }
+    .milestone.done { border-color: var(--green); }
+    .milestone.done .m-label { color: var(--green); }
+
+    /* ── Return slider ────────────────────────────────── */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: 1rem;
+      font-size: .82rem;
+      color: var(--muted);
+    }
+    input[type=range] {
+      flex: 1;
+      accent-color: var(--accent);
+    }
+    #returnLabel { color: var(--text); font-weight: 600; min-width: 36px; }
+
+    footer {
+      text-align: center;
+      font-size: .72rem;
+      color: var(--muted);
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Dashboard <span>FIRE</span> Personal</h1>
+  <span class="badge" id="lastUpdated">—</span>
+</header>
+
+<!-- ── Inputs ──────────────────────────────────────────── -->
+<div class="inputs-row">
+  <div class="input-card">
+    <label>Edad actual</label>
+    <input type="number" id="edadActual" value="38" min="18" max="52" />
+  </div>
+  <div class="input-card">
+    <label>Capital invertido (€)</label>
+    <input type="number" id="capitalActual" value="0" min="0" />
+  </div>
+  <div class="input-card">
+    <label>Otros ingresos/mes (€)</label>
+    <input type="number" id="otrosIngresos" value="2635" min="0" />
+  </div>
+</div>
+
+<!-- ── KPIs ────────────────────────────────────────────── -->
+<div class="kpi-grid">
+  <div class="kpi green">
+    <div class="kpi-label">Ingresos totales</div>
+    <div class="kpi-value" id="kpiIngresos">—</div>
+    <div class="kpi-sub">rentas + otros</div>
+  </div>
+  <div class="kpi red">
+    <div class="kpi-label">Gastos mensuales</div>
+    <div class="kpi-value">1.500 €</div>
+    <div class="kpi-sub">gastos personales</div>
+  </div>
+  <div class="kpi amber">
+    <div class="kpi-label">Inversión mensual</div>
+    <div class="kpi-value">750 €</div>
+    <div class="kpi-sub">MyInvestor</div>
+  </div>
+  <div class="kpi accent">
+    <div class="kpi-label">Ahorro neto</div>
+    <div class="kpi-value" id="kpiAhorro">—</div>
+    <div class="kpi-sub">después de todo</div>
+  </div>
+</div>
+
+<!-- ── Flujo de caja + FIRE progress ───────────────────── -->
+<div class="two-col">
+
+  <!-- Flujo de caja -->
+  <div class="card">
+    <div class="card-title">Flujo de caja mensual</div>
+
+    <div class="cf-row">
+      <span class="cf-label"><span class="cf-dot" style="background:var(--green)"></span>Renta Torrejón</span>
+      <span class="cf-amount" style="color:var(--green)">+37 €</span>
+    </div>
+    <div class="cf-row">
+      <span class="cf-label"><span class="cf-dot" style="background:var(--green)"></span>Renta Zarauz</span>
+      <span class="cf-amount" style="color:var(--green)">+578 €</span>
+    </div>
+    <div class="cf-row">
+      <span class="cf-label"><span class="cf-dot" style="background:#38bdf8)"></span>Otros ingresos</span>
+      <span class="cf-amount" style="color:#38bdf8" id="cfOtros">—</span>
+    </div>
+    <div class="cf-divider"></div>
+    <div class="cf-row">
+      <span class="cf-label"><span class="cf-dot" style="background:var(--red)"></span>Gastos personales</span>
+      <span class="cf-amount" style="color:var(--red)">−1.500 €</span>
+    </div>
+    <div class="cf-row">
+      <span class="cf-label"><span class="cf-dot" style="background:var(--amber)"></span>Inversión MyInvestor</span>
+      <span class="cf-amount" style="color:var(--amber)">−750 €</span>
+    </div>
+    <div class="cf-divider"></div>
+    <div class="cf-row total">
+      <span class="cf-label">Neto mensual</span>
+      <span class="cf-amount" id="cfNeto">—</span>
+    </div>
+  </div>
+
+  <!-- FIRE Progress -->
+  <div class="card">
+    <div class="card-title">Progreso objetivo FIRE</div>
+    <div class="fire-meta">
+      <span id="fireCapital">—</span>
+      <span id="firePct">—</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill" style="width:0%"></div>
+    </div>
+    <div class="fire-meta">
+      <span>0 €</span>
+      <span>🎯 240.000 €</span>
+    </div>
+    <div class="fire-stats">
+      <div class="fire-stat">
+        <strong id="fireAniosRestantes">—</strong>
+        Años hasta 53
+      </div>
+      <div class="fire-stat">
+        <strong id="fireFaltante">—</strong>
+        Capital faltante
+      </div>
+      <div class="fire-stat">
+        <strong id="fireAhorro">750 €/mes</strong>
+        Inversión mensual
+      </div>
+      <div class="fire-stat">
+        <strong id="fireAlcanza" style="color:var(--green)">—</strong>
+        Proyección a los 53
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Proyección + Hitos ────────────────────────────────── -->
+<div class="two-col" style="margin-bottom:1.5rem">
+
+  <div class="card">
+    <div class="card-title">Proyección de capital</div>
+    <div class="slider-row">
+      <span>Rentabilidad anual</span>
+      <input type="range" id="returnSlider" min="2" max="12" step="0.5" value="7" />
+      <span id="returnLabel">7%</span>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="fireChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Hitos del camino</div>
+    <div class="milestones" id="milestonesList"></div>
+  </div>
+
+</div>
+
+<footer>Actualizado <span id="footerDate">—</span> · Solo orientativo, no es asesoramiento financiero.</footer>
+
+<script>
+  // ── Constantes ────────────────────────────────────────
+  const RENTA_TORREJON = 37;
+  const RENTA_ZARAUZ   = 578;
+  const RENTAS_TOTAL   = RENTA_TORREJON + RENTA_ZARAUZ;
+  const GASTOS         = 1500;
+  const INVERSION      = 750;
+  const FIRE_OBJETIVO  = 240000;
+  const EDAD_FIRE      = 53;
+
+  const fmt = v => v.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' €';
+
+  // ── Chart setup ───────────────────────────────────────
+  const ctx = document.getElementById('fireChart').getContext('2d');
+  let chart = null;
+
+  function buildChart(labels, valores, objetivo) {
+    const goalLine = labels.map(() => objetivo);
+    if (chart) chart.destroy();
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Capital proyectado',
+            data: valores,
+            borderColor: '#6c63ff',
+            backgroundColor: 'rgba(108,99,255,.15)',
+            fill: true,
+            tension: .4,
+            pointRadius: 2,
+          },
+          {
+            label: 'Objetivo FIRE',
+            data: goalLine,
+            borderColor: '#22c55e',
+            borderDash: [6, 3],
+            pointRadius: 0,
+            fill: false,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            labels: { color: '#64748b', font: { size: 11 }, boxWidth: 12 }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ' ' + fmt(ctx.parsed.y)
+            }
+          }
+        },
+        scales: {
+          x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#2a2d3d' } },
+          y: {
+            ticks: {
+              color: '#64748b',
+              font: { size: 10 },
+              callback: v => (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v) + '€'
+            },
+            grid: { color: '#2a2d3d' }
+          }
+        }
+      }
+    });
+  }
+
+  // ── Projection logic ──────────────────────────────────
+  function calcularProyeccion(capitalInicial, inversionMensual, tasaAnual, anios) {
+    const r = tasaAnual / 100 / 12;
+    const series = [];
+    let capital = capitalInicial;
+    for (let m = 1; m <= anios * 12; m++) {
+      capital = capital * (1 + r) + inversionMensual;
+      if (m % 12 === 0) series.push(Math.round(capital));
+    }
+    return series;
+  }
+
+  // ── Milestones ────────────────────────────────────────
+  const HITOS = [
+    { label: 'Fondo emergencia (3 meses)', valor: 4500 },
+    { label: 'Primer 10%',                 valor: FIRE_OBJETIVO * 0.1 },
+    { label: '25% del objetivo',           valor: FIRE_OBJETIVO * 0.25 },
+    { label: '50% — punto medio',          valor: FIRE_OBJETIVO * 0.5 },
+    { label: '100k € invertidos',          valor: 100000 },
+    { label: '🎯 Objetivo FIRE',           valor: FIRE_OBJETIVO },
+  ];
+  const ICONOS = ['🛡️', '🌱', '📈', '🚀', '💯', '🔥'];
+
+  function renderMilestones(capitalActual) {
+    const el = document.getElementById('milestonesList');
+    el.innerHTML = HITOS.map((h, i) => {
+      const done = capitalActual >= h.valor;
+      return `<div class="milestone${done ? ' done' : ''}">
+        <span class="m-icon">${ICONOS[i]}</span>
+        <span class="m-label">${h.label}</span>
+        <span class="m-value">${done ? '✓' : fmt(h.valor)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Main update ───────────────────────────────────────
+  function update() {
+    const edadActual    = parseInt(document.getElementById('edadActual').value)    || 38;
+    const capitalActual = parseFloat(document.getElementById('capitalActual').value) || 0;
+    const otrosIngresos = parseFloat(document.getElementById('otrosIngresos').value) || 0;
+    const tasa          = parseFloat(document.getElementById('returnSlider').value) || 7;
+
+    document.getElementById('returnLabel').textContent = tasa + '%';
+
+    const aniosRestantes = Math.max(EDAD_FIRE - edadActual, 0);
+
+    // KPIs
+    const ingresosTotales = RENTAS_TOTAL + otrosIngresos;
+    const netoMensual     = ingresosTotales - GASTOS - INVERSION;
+
+    document.getElementById('kpiIngresos').textContent = fmt(ingresosTotales);
+    document.getElementById('kpiAhorro').textContent   = (netoMensual >= 0 ? '+' : '') + fmt(netoMensual);
+    document.getElementById('kpiAhorro').style.color   = netoMensual >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // Cash flow
+    document.getElementById('cfOtros').textContent = otrosIngresos ? '+' + fmt(otrosIngresos) : '+0 €';
+    const netoEl = document.getElementById('cfNeto');
+    netoEl.textContent = (netoMensual >= 0 ? '+' : '') + fmt(netoMensual);
+    netoEl.style.color = netoMensual >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // FIRE progress
+    const pct = Math.min(capitalActual / FIRE_OBJETIVO * 100, 100);
+    document.getElementById('fireCapital').textContent    = fmt(capitalActual) + ' actual';
+    document.getElementById('firePct').textContent        = pct.toFixed(1) + '%';
+    document.getElementById('progressFill').style.width   = pct + '%';
+    document.getElementById('fireAniosRestantes').textContent = aniosRestantes + ' años';
+    document.getElementById('fireFaltante').textContent   = fmt(Math.max(FIRE_OBJETIVO - capitalActual, 0));
+
+    // Projection
+    const serie   = calcularProyeccion(capitalActual, INVERSION, tasa, aniosRestantes);
+    const labels  = Array.from({ length: aniosRestantes }, (_, i) => edadActual + i + 1 + ' años');
+    const proyFinal = serie[serie.length - 1] || capitalActual;
+
+    document.getElementById('fireAlcanza').textContent = fmt(proyFinal);
+    document.getElementById('fireAlcanza').style.color = proyFinal >= FIRE_OBJETIVO ? 'var(--green)' : 'var(--amber)';
+
+    buildChart(labels, serie, FIRE_OBJETIVO);
+    renderMilestones(capitalActual);
+
+    // Timestamp
+    const now = new Date().toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    document.getElementById('lastUpdated').textContent = now;
+    document.getElementById('footerDate').textContent  = now;
+  }
+
+  // ── Events ────────────────────────────────────────────
+  ['edadActual', 'capitalActual', 'otrosIngresos'].forEach(id =>
+    document.getElementById(id).addEventListener('input', update)
+  );
+  document.getElementById('returnSlider').addEventListener('input', update);
+
+  update();
+</script>
+</body>
+</html>
