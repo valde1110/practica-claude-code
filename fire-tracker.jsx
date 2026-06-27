@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 
-const KEY = "fire-portfolio-v3";
+const KEY = "fire-portfolio-v4";
 
 const EXP_CATS = [
   { id: "food", label: "Alimentación", icon: "🛒", color: "#fb923c" },
@@ -20,11 +20,18 @@ const INC_CATS = [
   { id: "other_inc", label: "Otros", icon: "💰", color: "#fbbf24" },
 ];
 
+const PHASES = [
+  { id: "papeleo", label: "En papeleo", bg: "#1f2937", fg: "#9ca3af" },
+  { id: "reforma", label: "En reforma", bg: "#78350f", fg: "#fcd34d" },
+  { id: "buscando", label: "Buscando inquilino", bg: "#1e3a5f", fg: "#93c5fd" },
+  { id: "alquilado", label: "Alquilado", bg: "#065f46", fg: "#6ee7b7" },
+];
+
 function makeDefault() {
   return {
     props: [
       {
-        id: "tor", name: "Torrejón de Ardoz", active: true,
+        id: "tor", name: "Torrejón de Ardoz", phase: "alquilado",
         rent: 900, mortM1: 558, mortM2: 634, rateY1: 1.95, rateY2: 2.95, mortTerm: 25, bank: "Ibercaja",
         insAnnual: 359.52, insLabel: "Ibervida",
         ibi: 0, community: 0, maint: 90, vacancy: 5,
@@ -36,7 +43,7 @@ function makeDefault() {
         ]
       },
       {
-        id: "zar", name: "Zarauz", active: false,
+        id: "zar", name: "Zarauz", phase: "papeleo",
         rent: 0, mortM1: 0, mortM2: 0, rateY1: 0, rateY2: 0, mortTerm: 0, bank: "",
         insAnnual: 220, insLabel: "Seguro hogar",
         ibi: 380, community: 70, maint: 100, vacancy: 5,
@@ -46,11 +53,12 @@ function makeDefault() {
       }
     ],
     fire: {
-      salary: 2200, invest: 750, portfolio: 0,
+      invest: 750, portfolio: 0,
       target: 2500, returnRate: 7, swr: 4, appreciation: 2
     },
-    incomes: [
-      { id: "i1", cat: "salary", label: "Nómina", amt: 2200 }
+    incomesJuanma: [],
+    incomesAmanda: [
+      { id: "a1", cat: "salary", label: "Nómina", amt: 2200 }
     ],
     expenses: [
       { id: "e1", cat: "food", label: "Supermercado", amt: 350 },
@@ -60,6 +68,10 @@ function makeDefault() {
       { id: "e5", cat: "subs", label: "Suscripciones", amt: 50 },
       { id: "e6", cat: "other", label: "Varios", amt: 100 },
     ],
+    houseFund: {
+      recurring: [],
+      piggy: { balance: 0, goal: 0, log: [] }
+    },
     reserve: 1500, reserveGoal: 6000,
     yearMode: 1, projYears: 15
   };
@@ -91,16 +103,20 @@ function propCalc(p, y2) {
   var mnt = p.maint;
   var vac = p.rent * p.vacancy / 100;
   var dep = p.depBase * p.depRate / 100 / 12;
-  var exp = mort + ins + ibi + comm + mnt + vac;
+  var oper = ins + comm + mnt + vac;
+  var exp = mort + oper + ibi;
   var fcl = p.rent - exp;
-  return { income: p.rent, mort: mort, ins: ins, ibi: ibi, comm: comm, mnt: mnt, vac: vac, exp: exp, fcl: fcl, dep: dep };
+  var bruta = p.price > 0 ? (p.rent * 12 / p.price) : 0;
+  var neta = p.price > 0 ? (fcl * 12 / p.price) : 0;
+  return { income: p.rent, mort: mort, ins: ins, ibi: ibi, comm: comm, mnt: mnt, vac: vac, oper: oper, exp: exp, fcl: fcl, dep: dep, bruta: bruta, neta: neta };
 }
 
 var TABS = [
   { id: "dash", lbl: "Panel", ic: "◉" },
-  { id: "budget", lbl: "Gastos", ic: "💳" },
-  { id: "tor", lbl: "Torrejón", ic: "🏠" },
-  { id: "zar", lbl: "Zarauz", ic: "🏖" },
+  { id: "inc", lbl: "Ingresos", ic: "💰" },
+  { id: "exp", lbl: "Gastos", ic: "💳" },
+  { id: "casa", lbl: "Casa", ic: "🏡" },
+  { id: "props", lbl: "Inmuebles", ic: "🏠" },
   { id: "fire", lbl: "FIRE", ic: "🔥" },
   { id: "yearly", lbl: "Proyección", ic: "📊" },
   { id: "set", lbl: "⚙", ic: "" },
@@ -147,20 +163,17 @@ export default function App() {
   var tc = propCalc(data.props[0], y2);
   var zc = propCalc(data.props[1], y2);
   var rentalFCL = tc.fcl + zc.fcl;
-  var bInc = data.incomes.reduce(function (s, i) { return s + i.amt; }, 0);
+  var incJuanmaManual = data.incomesJuanma.reduce(function (s, i) { return s + i.amt; }, 0);
+  var incJuanma = incJuanmaManual + rentalFCL;
+  var incAmanda = data.incomesAmanda.reduce(function (s, i) { return s + i.amt; }, 0);
+  var bInc = incJuanma + incAmanda;
   var bExp = data.expenses.reduce(function (s, e) { return s + e.amt; }, 0);
-  var bNet = bInc - bExp;
-  var disposable = bInc + rentalFCL - bExp;
+  var disposable = bInc - bExp;
   var fireNum = data.fire.target * 12 / (data.fire.swr / 100);
   var firePct = fireNum > 0 ? data.fire.portfolio / fireNum : 0;
-  var savRate = (bInc + Math.max(rentalFCL, 0)) > 0 ? data.fire.invest / (bInc + Math.max(rentalFCL, 0)) : 0;
+  var savRate = bInc > 0 ? data.fire.invest / bInc : 0;
 
-  var cx = { tc: tc, zc: zc, rentalFCL: rentalFCL, bInc: bInc, bExp: bExp, bNet: bNet, disposable: disposable, fireNum: fireNum, firePct: firePct, savRate: savRate };
-
-  function upProp(idx, changes) {
-    var np = data.props.map(function (p, i) { return i === idx ? Object.assign({}, p, changes) : p; });
-    save(Object.assign({}, data, { props: np }));
-  }
+  var cx = { tc: tc, zc: zc, rentalFCL: rentalFCL, incJuanma: incJuanma, incAmanda: incAmanda, bInc: bInc, bExp: bExp, disposable: disposable, fireNum: fireNum, firePct: firePct, savRate: savRate };
 
   return (
     <div style={st.app}>
@@ -169,7 +182,7 @@ export default function App() {
           <span style={{ fontSize: 22, color: "#4ade80" }}>◉</span>
           <div>
             <div style={st.title}>FIRE Portfolio</div>
-            <div style={st.sub}>Inmuebles · Presupuesto · FIRE</div>
+            <div style={st.sub}>Pata Financiera · Pata Inmobiliaria</div>
           </div>
         </div>
         <span style={st.yrBadge} onClick={function () { save(Object.assign({}, data, { yearMode: data.yearMode === 1 ? 2 : 1 })); }}>
@@ -190,10 +203,11 @@ export default function App() {
       </nav>
 
       <main style={st.main}>
-        {tab === "dash" && <DashTab data={data} cx={cx} />}
-        {tab === "budget" && <BudgetTab data={data} save={save} cx={cx} />}
-        {tab === "tor" && <PropTab p={data.props[0]} c={tc} up={function (ch) { upProp(0, ch); }} ym={data.yearMode} />}
-        {tab === "zar" && <PropTab p={data.props[1]} c={zc} up={function (ch) { upProp(1, ch); }} ym={data.yearMode} />}
+        {tab === "dash" && <DashTab data={data} cx={cx} setTab={setTab} />}
+        {tab === "inc" && <IncomeTab data={data} save={save} cx={cx} />}
+        {tab === "exp" && <ExpenseTab data={data} save={save} cx={cx} setTab={setTab} />}
+        {tab === "casa" && <CasaTab data={data} save={save} />}
+        {tab === "props" && <PropsTab data={data} save={save} ym={data.yearMode} />}
         {tab === "fire" && <FireTab data={data} save={save} cx={cx} />}
         {tab === "yearly" && <YearTab data={data} cx={cx} save={save} />}
         {tab === "set" && <SetTab data={data} save={save} />}
@@ -204,28 +218,43 @@ export default function App() {
 
 /* ===== DASHBOARD ===== */
 function DashTab(p) {
-  var d = p.data, cx = p.cx;
-  var alerts = d.props[0].alerts.map(function (a) { return Object.assign({}, a, { prop: "Torrejón" }); })
-    .concat(d.props[1].alerts.map(function (a) { return Object.assign({}, a, { prop: "Zarauz" }); }));
+  var d = p.data, cx = p.cx, setTab = p.setTab;
+  var alerts = d.props.reduce(function (acc, pr) {
+    return acc.concat(pr.alerts.map(function (a) { return Object.assign({}, a, { prop: pr.name }); }));
+  }, []);
+  var missing = d.props.filter(function (pr) { return !pr.ibiSet || !pr.commSet; });
 
   return (
     <div style={st.col}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div onClick={function () { setTab("fire"); }} style={Object.assign({}, st.card, { cursor: "pointer" })}>
+          <div style={{ fontSize: 11, color: "#6b7280" }}>💼 Pata Financiera</div>
+          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "monospace", color: "#4ade80", marginTop: 4 }}>{fp(Math.min(cx.firePct, 1))}</div>
+          <div style={{ fontSize: 10, color: "#6b7280" }}>hacia FIRE</div>
+        </div>
+        <div onClick={function () { setTab("props"); }} style={Object.assign({}, st.card, { cursor: "pointer" })}>
+          <div style={{ fontSize: 11, color: "#6b7280" }}>🏠 Pata Inmobiliaria</div>
+          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "monospace", color: cx.rentalFCL >= 0 ? "#4ade80" : "#f87171", marginTop: 4 }}>{fm(cx.rentalFCL)}</div>
+          <div style={{ fontSize: 10, color: "#6b7280" }}>FCL/mes</div>
+        </div>
+      </div>
+
       <div style={st.kpiRow}>
-        <Kpi l="FCL Inmuebles" v={fm(cx.rentalFCL)} s="/mes" ok={cx.rentalFCL >= 0} />
         <Kpi l="Disponible" v={fm(cx.disposable)} s="/mes" ok={cx.disposable >= 0} />
         <Kpi l="FIRE" v={fp(Math.min(cx.firePct, 1))} s={fk(cx.fireNum)} ok={cx.firePct > 0.05} />
         <Kpi l="Tasa ahorro" v={fp(cx.savRate)} s="del ingreso" ok={cx.savRate >= 0.2} />
+        <Kpi l="FCL Inmuebles" v={fm(cx.rentalFCL)} s="/mes" ok={cx.rentalFCL >= 0} />
       </div>
 
       <div style={st.card}>
         <div style={st.secT}>Balance mensual integrado</div>
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <Bar3 l="Ingresos" v={cx.bInc} c="#4ade80" mx={Math.max(cx.bInc, cx.bExp, 1)} />
-          <Bar3 l="Gastos" v={cx.bExp} c="#f87171" mx={Math.max(cx.bInc, cx.bExp, 1)} />
-          <Bar3 l="Inmuebles" v={cx.rentalFCL} c={cx.rentalFCL >= 0 ? "#60a5fa" : "#f87171"} mx={Math.max(cx.bInc, cx.bExp, 1)} />
+          <Bar3 l="Ing. Juanma" v={cx.incJuanma} c="#4ade80" mx={Math.max(cx.incJuanma, cx.incAmanda, cx.bExp, 1)} />
+          <Bar3 l="Ing. Amanda" v={cx.incAmanda} c="#34d399" mx={Math.max(cx.incJuanma, cx.incAmanda, cx.bExp, 1)} />
+          <Bar3 l="Gastos" v={cx.bExp} c="#f87171" mx={Math.max(cx.incJuanma, cx.incAmanda, cx.bExp, 1)} />
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 8, borderTop: "1px solid #2a2d35" }}>
-          <span style={{ color: "#9ca3af", fontSize: 13 }}>Sobrante mensual</span>
+          <span style={{ color: "#9ca3af", fontSize: 13 }}>Disponible mensual</span>
           <span style={{ fontWeight: 700, fontSize: 18, color: cx.disposable >= 0 ? "#4ade80" : "#f87171", fontFamily: "monospace" }}>{fm(cx.disposable)}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#6b7280" }}>
@@ -234,16 +263,18 @@ function DashTab(p) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <PropMini name="Torrejón" active={true} c={cx.tc} ic="🏠" />
-        <PropMini name="Zarauz" active={false} c={cx.zc} ic="🏖" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 8 }}>
+        {d.props.map(function (pr, i) {
+          var c = i === 0 ? cx.tc : cx.zc;
+          return <PropMini key={pr.id} name={pr.name} phase={pr.phase} c={c} ic={i === 0 ? "🏠" : "🏖"} />;
+        })}
       </div>
 
-      {alerts.length > 0 && (
+      {(alerts.length > 0 || missing.length > 0) && (
         <div style={st.col}>
           <div style={st.secT}>Alertas</div>
           {alerts.map(function (a, i) { return <AlertBox key={i} a={a} />; })}
-          {!d.props[0].ibiSet && <AlertBox a={{ t: "warn", prop: "Datos", txt: "Pendiente: IBI Torrejón, Comunidad Torrejón" }} />}
+          {missing.length > 0 && <AlertBox a={{ t: "warn", prop: "Datos", txt: "Pendiente: " + missing.map(function (pr) { return pr.name; }).join(", ") }} />}
         </div>
       )}
     </div>
@@ -263,28 +294,89 @@ function Bar3(p) {
   );
 }
 
-/* ===== BUDGET ===== */
-function BudgetTab(p) {
+/* ===== INGRESOS ===== */
+function IncomeTab(p) {
   var d = p.data, save = p.save, cx = p.cx;
   var _a = useState(null), adding = _a[0], setAdding = _a[1];
   var _f = useState({ label: "", amt: "", cat: "" }), form = _f[0], setForm = _f[1];
+  var manualCats = INC_CATS.filter(function (c) { return c.id !== "rental"; });
 
-  function addItem(type) {
+  function addItem(key) {
     if (!form.label || !form.amt) return;
-    var it = { id: uid(), cat: form.cat || "other", label: form.label, amt: parseFloat(form.amt) || 0 };
-    if (type === "inc") save(Object.assign({}, d, { incomes: d.incomes.concat([it]) }));
-    else save(Object.assign({}, d, { expenses: d.expenses.concat([it]) }));
+    var it = { id: uid(), cat: form.cat || "other_inc", label: form.label, amt: parseFloat(form.amt) || 0 };
+    var changes = {}; changes[key] = d[key].concat([it]);
+    save(Object.assign({}, d, changes));
     setForm({ label: "", amt: "", cat: "" }); setAdding(null);
   }
-
-  function rmItem(type, id) {
-    if (type === "inc") save(Object.assign({}, d, { incomes: d.incomes.filter(function (x) { return x.id !== id; }) }));
-    else save(Object.assign({}, d, { expenses: d.expenses.filter(function (x) { return x.id !== id; }) }));
+  function rmItem(key, id) {
+    var changes = {}; changes[key] = d[key].filter(function (x) { return x.id !== id; });
+    save(Object.assign({}, d, changes));
+  }
+  function upAmt(key, id, amt) {
+    var changes = {}; changes[key] = d[key].map(function (x) { return x.id === id ? Object.assign({}, x, { amt: amt }) : x; });
+    save(Object.assign({}, d, changes));
   }
 
-  function upAmt(type, id, amt) {
-    if (type === "inc") save(Object.assign({}, d, { incomes: d.incomes.map(function (x) { return x.id === id ? Object.assign({}, x, { amt: amt }) : x; }) }));
-    else save(Object.assign({}, d, { expenses: d.expenses.map(function (x) { return x.id === id ? Object.assign({}, x, { amt: amt }) : x; }) }));
+  return (
+    <div style={st.col}>
+      <div style={st.card}>
+        <div style={st.secT}>Juanma</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 0", borderBottom: "1px solid #1f2937" }}>
+          <span style={{ fontSize: 15 }}>🏘</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, color: "#d1d5db" }}>Alquileres (Inmuebles)</div>
+            <div style={{ fontSize: 10, color: "#6b7280" }}>🔗 automático · ver pestaña Inmuebles</div>
+          </div>
+          <span style={{ fontFamily: "monospace", fontSize: 13, color: cx.rentalFCL >= 0 ? "#4ade80" : "#f87171" }}>{fm(cx.rentalFCL)}</span>
+        </div>
+        {d.incomesJuanma.map(function (it) {
+          return <BRow key={it.id} item={it} cats={manualCats} type="inc" onRm={function () { rmItem("incomesJuanma", it.id); }} onAmt={function (a) { upAmt("incomesJuanma", it.id, a); }} />;
+        })}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+          <button onClick={function () { setAdding(adding === "ju" ? null : "ju"); }} style={st.addBtn}>{adding === "ju" ? "✕" : "+ Añadir ingreso"}</button>
+          <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#4ade80" }}>{fm(cx.incJuanma)}</span>
+        </div>
+        {adding === "ju" && <AddForm form={form} setForm={setForm} onAdd={function () { addItem("incomesJuanma"); }} cats={manualCats} />}
+      </div>
+
+      <div style={st.card}>
+        <div style={st.secT}>Amanda</div>
+        {d.incomesAmanda.map(function (it) {
+          return <BRow key={it.id} item={it} cats={manualCats} type="inc" onRm={function () { rmItem("incomesAmanda", it.id); }} onAmt={function (a) { upAmt("incomesAmanda", it.id, a); }} />;
+        })}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+          <button onClick={function () { setAdding(adding === "am" ? null : "am"); }} style={st.addBtn}>{adding === "am" ? "✕" : "+ Añadir ingreso"}</button>
+          <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#4ade80" }}>{fm(cx.incAmanda)}</span>
+        </div>
+        {adding === "am" && <AddForm form={form} setForm={setForm} onAdd={function () { addItem("incomesAmanda"); }} cats={manualCats} />}
+      </div>
+
+      <div style={Object.assign({}, st.card, { textAlign: "center" })}>
+        <div style={{ fontSize: 11, color: "#6b7280" }}>Ingresos del hogar</div>
+        <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "monospace", color: "#4ade80" }}>{fm(cx.bInc)}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ===== GASTOS ===== */
+function ExpenseTab(p) {
+  var d = p.data, save = p.save, cx = p.cx, setTab = p.setTab;
+  var _a = useState(false), adding = _a[0], setAdding = _a[1];
+  var _f = useState({ label: "", amt: "", cat: "" }), form = _f[0], setForm = _f[1];
+  var _pi = useState(false), showProps = _pi[0], setShowProps = _pi[1];
+
+  function addItem() {
+    if (!form.label || !form.amt) return;
+    var it = { id: uid(), cat: form.cat || "other", label: form.label, amt: parseFloat(form.amt) || 0 };
+    save(Object.assign({}, d, { expenses: d.expenses.concat([it]) }));
+    setForm({ label: "", amt: "", cat: "" }); setAdding(false);
+  }
+  function rmItem(id) {
+    save(Object.assign({}, d, { expenses: d.expenses.filter(function (x) { return x.id !== id; }) }));
+  }
+  function upAmt(id, amt) {
+    save(Object.assign({}, d, { expenses: d.expenses.map(function (x) { return x.id === id ? Object.assign({}, x, { amt: amt }) : x; }) }));
   }
 
   var net = cx.bInc - cx.bExp;
@@ -293,15 +385,17 @@ function BudgetTab(p) {
     return Object.assign({}, c, { sum: sum });
   }).filter(function (c) { return c.sum > 0; }).sort(function (a, b) { return b.sum - a.sum; });
 
+  var propsExp = cx.tc.exp + cx.zc.exp;
+
   return (
     <div style={st.col}>
       <div style={st.card}>
         <div style={{ display: "flex", justifyContent: "space-around", textAlign: "center" }}>
-          <div><div style={{ fontSize: 10, color: "#6b7280" }}>Ingresos</div><div style={{ fontSize: 20, fontWeight: 700, color: "#4ade80", fontFamily: "monospace" }}>{fm(cx.bInc)}</div></div>
+          <div><div style={{ fontSize: 10, color: "#6b7280" }}>Ingresos hogar</div><div style={{ fontSize: 20, fontWeight: 700, color: "#4ade80", fontFamily: "monospace" }}>{fm(cx.bInc)}</div></div>
           <div style={{ width: 1, background: "#2a2d35" }} />
-          <div><div style={{ fontSize: 10, color: "#6b7280" }}>Gastos</div><div style={{ fontSize: 20, fontWeight: 700, color: "#f87171", fontFamily: "monospace" }}>{fm(-cx.bExp)}</div></div>
+          <div><div style={{ fontSize: 10, color: "#6b7280" }}>Gastos (Juanma)</div><div style={{ fontSize: 20, fontWeight: 700, color: "#f87171", fontFamily: "monospace" }}>{fm(-cx.bExp)}</div></div>
           <div style={{ width: 1, background: "#2a2d35" }} />
-          <div><div style={{ fontSize: 10, color: "#6b7280" }}>Neto</div><div style={{ fontSize: 20, fontWeight: 700, color: net >= 0 ? "#4ade80" : "#f87171", fontFamily: "monospace" }}>{fm(net)}</div></div>
+          <div><div style={{ fontSize: 10, color: "#6b7280" }}>Disponible</div><div style={{ fontSize: 20, fontWeight: 700, color: net >= 0 ? "#4ade80" : "#f87171", fontFamily: "monospace" }}>{fm(net)}</div></div>
         </div>
       </div>
 
@@ -326,34 +420,37 @@ function BudgetTab(p) {
 
       <div style={st.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <div style={st.secT}>Ingresos mensuales</div>
-          <button onClick={function () { setAdding(adding === "inc" ? null : "inc"); }} style={st.addBtn}>{adding === "inc" ? "✕" : "+"}</button>
+          <div style={st.secT}>Gastos mensuales (Juanma)</div>
+          <button onClick={function () { setAdding(!adding); }} style={st.addBtn}>{adding ? "✕" : "+"}</button>
         </div>
-        {adding === "inc" && <AddForm form={form} setForm={setForm} onAdd={function () { addItem("inc"); }} cats={INC_CATS} />}
-        {d.incomes.map(function (it) {
-          return <BRow key={it.id} item={it} cats={INC_CATS} type="inc" onRm={function () { rmItem("inc", it.id); }} onAmt={function (a) { upAmt("inc", it.id, a); }} />;
+        {adding && <AddForm form={form} setForm={setForm} onAdd={addItem} cats={EXP_CATS} />}
+        {d.expenses.map(function (it) {
+          return <BRow key={it.id} item={it} cats={EXP_CATS} type="exp" onRm={function () { rmItem(it.id); }} onAmt={function (a) { upAmt(it.id, a); }} />;
         })}
       </div>
 
       <div style={st.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <div style={st.secT}>Gastos mensuales</div>
-          <button onClick={function () { setAdding(adding === "exp" ? null : "exp"); }} style={st.addBtn}>{adding === "exp" ? "✕" : "+"}</button>
+        <div onClick={function () { setShowProps(!showProps); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+          <div style={st.secT}>Gastos de inmuebles <span style={{ fontSize: 10, color: "#6b7280", fontWeight: 400 }}>(informativo)</span></div>
+          <span style={{ color: "#6b7280" }}>{showProps ? "▲" : "▼"}</span>
         </div>
-        {adding === "exp" && <AddForm form={form} setForm={setForm} onAdd={function () { addItem("exp"); }} cats={EXP_CATS} />}
-        {d.expenses.map(function (it) {
-          return <BRow key={it.id} item={it} cats={EXP_CATS} type="exp" onRm={function () { rmItem("exp", it.id); }} onAmt={function (a) { upAmt("exp", it.id, a); }} />;
-        })}
+        {!showProps && <div style={{ fontSize: 11, color: "#6b7280" }}>Total: {fm(-propsExp)}/mes · no se resta de tu disponible</div>}
+        {showProps && (
+          <div style={{ marginTop: 6 }}>
+            <DRow l={d.props[0].name} v={-cx.tc.exp} />
+            <DRow l={d.props[1].name} v={-cx.zc.exp} />
+            <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 6, borderTop: "1px solid #2a2d35", marginTop: 4 }}>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>Total inmuebles</span>
+              <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#f87171" }}>{fm(-propsExp)}</span>
+            </div>
+            <div style={{ fontSize: 10, color: "#6b7280", marginTop: 4 }}>Ya descontado del FCL de cada propiedad — no se resta de tu disponible aquí.</div>
+          </div>
+        )}
       </div>
 
-      <div style={Object.assign({}, st.card, { background: "#0f1520", border: "1px solid #1e3a5f" })}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#93c5fd", marginBottom: 6 }}>🔥 Conexión FIRE</div>
-        <p style={{ fontSize: 13, color: "#9ca3af", lineHeight: 1.6, margin: "0 0 4px" }}>
-          Sobrante personal ({fm(net)}) + rentas ({fm(cx.rentalFCL)}) = <strong style={{ color: "#e5e7eb" }}>{fm(cx.disposable)}</strong>
-        </p>
-        <p style={{ fontSize: 13, color: "#9ca3af", lineHeight: 1.6, margin: 0 }}>
-          Inviertes {fm(d.fire.invest)}/mes. Sin asignar: <strong style={{ color: cx.disposable - d.fire.invest >= 0 ? "#4ade80" : "#f87171" }}>{fm(cx.disposable - d.fire.invest)}</strong>
-        </p>
+      <div onClick={function () { setTab("casa"); }} style={Object.assign({}, st.card, { cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" })}>
+        <span style={{ fontSize: 13, color: "#93c5fd" }}>🏡 Ver gastos compartidos y hucha de la Casa</span>
+        <span style={{ color: "#6b7280" }}>→</span>
       </div>
     </div>
   );
@@ -402,9 +499,165 @@ function BRow(p) {
   );
 }
 
-/* ===== PROPERTY ===== */
-function PropTab(p) {
-  var pr = p.p, c = p.c, up = p.up, ym = p.ym;
+/* ===== CASA ===== */
+function CasaTab(p) {
+  var d = p.data, save = p.save;
+  var _a = useState(false), adding = _a[0], setAdding = _a[1];
+  var _f = useState({ label: "", amt: "", cat: "" }), form = _f[0], setForm = _f[1];
+  var _per = useState("Juanma"), person = _per[0], setPerson = _per[1];
+
+  var recurring = d.houseFund.recurring;
+  var totalRecurring = recurring.reduce(function (s, e) { return s + e.amt; }, 0);
+  var piggy = d.houseFund.piggy;
+  var pct = piggy.goal > 0 ? Math.min(piggy.balance / piggy.goal * 100, 100) : 0;
+
+  function addRec() {
+    if (!form.label || !form.amt) return;
+    var it = { id: uid(), cat: form.cat || "other", label: form.label, amt: parseFloat(form.amt) || 0 };
+    save(Object.assign({}, d, { houseFund: Object.assign({}, d.houseFund, { recurring: recurring.concat([it]) }) }));
+    setForm({ label: "", amt: "", cat: "" }); setAdding(false);
+  }
+  function rmRec(id) {
+    save(Object.assign({}, d, { houseFund: Object.assign({}, d.houseFund, { recurring: recurring.filter(function (x) { return x.id !== id; }) }) }));
+  }
+  function upRecAmt(id, amt) {
+    save(Object.assign({}, d, { houseFund: Object.assign({}, d.houseFund, { recurring: recurring.map(function (x) { return x.id === id ? Object.assign({}, x, { amt: amt }) : x; }) }) }));
+  }
+  function addPiggy(amt) {
+    var entry = { id: uid(), date: new Date().toISOString().slice(0, 10), person: person, amt: amt };
+    var npf = Object.assign({}, piggy, { balance: piggy.balance + amt, log: [entry].concat(piggy.log).slice(0, 20) });
+    save(Object.assign({}, d, { houseFund: Object.assign({}, d.houseFund, { piggy: npf }) }));
+  }
+  function setBalance(v) {
+    save(Object.assign({}, d, { houseFund: Object.assign({}, d.houseFund, { piggy: Object.assign({}, piggy, { balance: parseFloat(v) || 0 }) }) }));
+  }
+  function setGoal(v) {
+    save(Object.assign({}, d, { houseFund: Object.assign({}, d.houseFund, { piggy: Object.assign({}, piggy, { goal: parseFloat(v) || 0 }) }) }));
+  }
+
+  return (
+    <div style={st.col}>
+      <div style={st.card}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <div style={st.secT}>Gastos recurrentes del hogar</div>
+          <button onClick={function () { setAdding(!adding); }} style={st.addBtn}>{adding ? "✕" : "+"}</button>
+        </div>
+        <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 6 }}>Informativo: lo que pagáis entre los dos cada mes de forma recurrente.</div>
+        {adding && <AddForm form={form} setForm={setForm} onAdd={addRec} cats={EXP_CATS} />}
+        {recurring.map(function (it) {
+          return <BRow key={it.id} item={it} cats={EXP_CATS} type="exp" onRm={function () { rmRec(it.id); }} onAmt={function (a) { upRecAmt(it.id, a); }} />;
+        })}
+        <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 6, borderTop: "1px solid #2a2d35", marginTop: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Total recurrente</span>
+          <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{fm(-totalRecurring)}</span>
+        </div>
+      </div>
+
+      <div style={st.card}>
+        <div style={st.secT}>Hucha de arreglos</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
+          <div style={{ flex: 1, height: 16, background: "#1f2937", borderRadius: 4, overflow: "hidden" }}>
+            <div style={{ width: pct + "%", height: "100%", borderRadius: 4, background: pct >= 80 ? "#22c55e" : pct >= 40 ? "#eab308" : "#ef4444" }} />
+          </div>
+          <span style={{ color: "#e5e7eb", fontWeight: 600, fontFamily: "monospace", fontSize: 13 }}>{fm(piggy.balance)}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#6b7280", marginBottom: 8 }}>
+          <span>0€</span><span>Meta: {piggy.goal > 0 ? fm(piggy.goal) : "sin definir"}</span>
+        </div>
+        <div style={{ display: "flex", gap: 5, marginBottom: 8 }}>
+          {["Juanma", "Amanda"].map(function (name) {
+            return <button key={name} onClick={function () { setPerson(name); }} style={Object.assign({}, st.smBtn, person === name ? { background: "#1e3a5f", color: "#93c5fd" } : {})}>{name}</button>;
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {[20, 50, 100].map(function (n) {
+            return <button key={n} onClick={function () { addPiggy(n); }} style={st.smBtn}>+{n}€ ({person})</button>;
+          })}
+          <button onClick={function () { var v = prompt("Nuevo saldo:"); if (v) setBalance(v); }} style={Object.assign({}, st.smBtn, { background: "#1f2937" })}>Ajustar</button>
+          <button onClick={function () { var v = prompt("Meta (€):"); if (v) setGoal(v); }} style={Object.assign({}, st.smBtn, { background: "#1f2937" })}>Definir meta</button>
+        </div>
+        {piggy.log.length > 0 && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Últimas aportaciones</div>
+            {piggy.log.slice(0, 5).map(function (l) {
+              return (
+                <div key={l.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "3px 0", borderBottom: "1px solid #1f2937" }}>
+                  <span style={{ color: "#9ca3af" }}>{l.date} · {l.person}</span>
+                  <span style={{ fontFamily: "monospace", color: "#4ade80" }}>+{l.amt}€</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div style={{ fontSize: 10, color: "#6b7280", marginTop: 10 }}>Aportación manual por ahora — la automatizaremos más adelante.</div>
+      </div>
+    </div>
+  );
+}
+
+/* ===== INMUEBLES ===== */
+function PropsTab(p) {
+  var d = p.data, save = p.save, ym = p.ym;
+  var _ex = useState(null), expandedId = _ex[0], setExpanded = _ex[1];
+
+  var calcs = d.props.map(function (pr) { return propCalc(pr, ym === 2); });
+  var totalRent = calcs.reduce(function (s, c) { return s + c.income; }, 0);
+  var totalFcl = calcs.reduce(function (s, c) { return s + c.fcl; }, 0);
+  var alquilados = d.props.filter(function (pr) { return pr.phase === "alquilado"; }).length;
+
+  function upProp(idx, changes) {
+    var np = d.props.map(function (pr, i) { return i === idx ? Object.assign({}, pr, changes) : pr; });
+    save(Object.assign({}, d, { props: np }));
+  }
+
+  return (
+    <div style={st.col}>
+      <div style={st.card}>
+        <div style={st.secT}>Cartera inmobiliaria</div>
+        <div style={{ display: "flex", justifyContent: "space-around", textAlign: "center", marginTop: 6 }}>
+          <div><div style={{ fontSize: 10, color: "#6b7280" }}>Renta total</div><div style={{ fontSize: 17, fontWeight: 700, fontFamily: "monospace", color: "#4ade80" }}>{fm(totalRent)}</div></div>
+          <div><div style={{ fontSize: 10, color: "#6b7280" }}>FCL total</div><div style={{ fontSize: 17, fontWeight: 700, fontFamily: "monospace", color: totalFcl >= 0 ? "#4ade80" : "#f87171" }}>{fm(totalFcl)}</div></div>
+          <div><div style={{ fontSize: 10, color: "#6b7280" }}>Alquilados</div><div style={{ fontSize: 17, fontWeight: 700, fontFamily: "monospace" }}>{alquilados}/{d.props.length}</div></div>
+        </div>
+      </div>
+
+      {d.props.map(function (pr, i) {
+        return (
+          <PropCard key={pr.id} pr={pr} c={calcs[i]} ym={ym}
+            expanded={expandedId === pr.id}
+            onToggle={function () { setExpanded(expandedId === pr.id ? null : pr.id); }}
+            up={function (ch) { upProp(i, ch); }} />
+        );
+      })}
+    </div>
+  );
+}
+
+function PropCard(p) {
+  var pr = p.pr, c = p.c;
+  var ph = PHASES.find(function (x) { return x.id === pr.phase; }) || PHASES[0];
+  return (
+    <div style={st.card}>
+      <div onClick={p.onToggle} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#e5e7eb" }}>{pr.name}</div>
+          <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 8, fontWeight: 600, background: ph.bg, color: ph.fg }}>{ph.label}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 10, color: "#6b7280" }}>FCL</div>
+            <div style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 14, color: c.fcl >= 0 ? "#4ade80" : "#f87171" }}>{fm(c.fcl)}</div>
+          </div>
+          <span style={{ color: "#6b7280", fontSize: 12 }}>{p.expanded ? "▲" : "▼"}</span>
+        </div>
+      </div>
+      {p.expanded && <PropDetail pr={pr} c={c} up={p.up} ym={p.ym} />}
+    </div>
+  );
+}
+
+function PropDetail(p) {
+  var pr = p.pr, c = p.c, up = p.up, ym = p.ym;
   var _e = useState(null), ed = _e[0], setEd = _e[1];
   var _t = useState(""), tmp = _t[0], setTmp = _t[1];
 
@@ -427,30 +680,29 @@ function PropTab(p) {
   }
 
   return (
-    <div style={st.col}>
-      <div style={st.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: "#e5e7eb" }}>{pr.name}</div>
-          <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 8, fontWeight: 600, background: pr.active ? "#065f46" : "#78350f", color: pr.active ? "#6ee7b7" : "#fcd34d" }}>
-            {pr.active ? "Activo" : "Pendiente"}
-          </span>
-        </div>
-        {pr.mortM1 > 0 && (
-          <div style={{ background: "#1a1d24", borderRadius: 8, padding: 10, border: "1px solid #2a2d35" }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#9ca3af", fontSize: 12 }}>Hipoteca {pr.bank}</span>
-              <span style={{ color: "#e5e7eb", fontWeight: 600, fontSize: 13 }}>{fm(-c.mort)}/mes</span>
-            </div>
-            <div style={{ display: "flex", gap: 12, marginTop: 5, fontSize: 11, color: "#6b7280" }}>
-              <span>Tipo: {ym === 1 ? pr.rateY1 : pr.rateY2}%</span>
-              <span>Plazo: {pr.mortTerm}a</span>
-            </div>
-          </div>
-        )}
+    <div style={{ marginTop: 10, borderTop: "1px solid #2a2d35", paddingTop: 10 }}>
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+        {PHASES.map(function (ph) {
+          return <button key={ph.id} onClick={function () { up({ phase: ph.id }); }}
+            style={Object.assign({}, st.smBtn, pr.phase === ph.id ? { background: ph.bg, color: ph.fg } : {})}>{ph.label}</button>;
+        })}
       </div>
 
-      <div style={st.card}>
-        <div style={st.secT}>Parámetros</div>
+      {pr.mortM1 > 0 && (
+        <div style={{ background: "#1a1d24", borderRadius: 8, padding: 10, border: "1px solid #2a2d35", marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "#9ca3af", fontSize: 12 }}>Hipoteca {pr.bank}</span>
+            <span style={{ color: "#e5e7eb", fontWeight: 600, fontSize: 13 }}>{fm(-c.mort)}/mes</span>
+          </div>
+          <div style={{ display: "flex", gap: 12, marginTop: 5, fontSize: 11, color: "#6b7280" }}>
+            <span>Tipo: {ym === 1 ? pr.rateY1 : pr.rateY2}%</span>
+            <span>Plazo: {pr.mortTerm}a</span>
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginBottom: 4 }}>
+        <div style={st.blockT}>Parámetros</div>
         {fields.map(function (f) {
           return (
             <div key={f.k} style={Object.assign({}, st.editRow, f.miss ? { borderLeft: "3px solid #fbbf24" } : {})}>
@@ -473,29 +725,43 @@ function PropTab(p) {
         })}
       </div>
 
-      <div style={st.card}>
-        <div style={st.secT}>Desglose mensual</div>
+      <div style={{ marginTop: 10 }}>
+        <div style={st.blockT}>Financiación</div>
         <DRow l="Renta" v={c.income} green={true} />
         <DRow l="Hipoteca" v={-c.mort} />
-        <DRow l="Seguro" v={-c.ins} sub={pr.insLabel} />
+      </div>
+
+      <div style={{ marginTop: 8 }}>
+        <div style={st.blockT}>Fiscalidad</div>
         <DRow l="IBI" v={-c.ibi} miss={!pr.ibiSet} />
-        <DRow l="Comunidad" v={-c.comm} miss={!pr.commSet} />
-        <DRow l="Mantenimiento" v={-c.mnt} />
-        <DRow l="Vacancia" v={-c.vac} />
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderTop: "2px solid #374151", marginTop: 6 }}>
-          <span style={{ fontWeight: 700 }}>FCL</span>
-          <span style={{ fontWeight: 700, fontSize: 17, color: c.fcl >= 0 ? "#4ade80" : "#f87171", fontFamily: "monospace" }}>{fm(c.fcl)}</span>
-        </div>
         {c.dep > 0 && (
-          <div style={{ display: "flex", justifyContent: "space-between", opacity: 0.5, fontSize: 11, paddingTop: 4, borderTop: "1px dashed #374151" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", opacity: 0.6, fontSize: 11, padding: "4px 0" }}>
             <span>Deducción amortización</span><span style={{ color: "#93c5fd" }}>{fm(c.dep)}/mes fiscal</span>
           </div>
         )}
       </div>
 
+      <div style={{ marginTop: 8 }}>
+        <div style={st.blockT}>Operación</div>
+        <DRow l="Seguro" v={-c.ins} sub={pr.insLabel} />
+        <DRow l="Comunidad" v={-c.comm} miss={!pr.commSet} />
+        <DRow l="Mantenimiento" v={-c.mnt} />
+        <DRow l="Vacancia" v={-c.vac} />
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderTop: "2px solid #374151", marginTop: 8 }}>
+        <span style={{ fontWeight: 700 }}>FCL</span>
+        <span style={{ fontWeight: 700, fontSize: 17, color: c.fcl >= 0 ? "#4ade80" : "#f87171", fontFamily: "monospace" }}>{fm(c.fcl)}</span>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-around", marginTop: 8, paddingTop: 8, borderTop: "1px dashed #374151" }}>
+        <FsStat v={fp(c.bruta)} l="rent. bruta" />
+        <FsStat v={fp(c.neta)} l="rent. neta" c={c.neta >= 0 ? "#4ade80" : "#f87171"} />
+      </div>
+
       {pr.alerts.length > 0 && (
-        <div style={st.card}>
-          <div style={st.secT}>Alertas</div>
+        <div style={{ marginTop: 10 }}>
+          <div style={st.blockT}>Alertas</div>
           {pr.alerts.map(function (a, i) { return <AlertBox key={i} a={Object.assign({}, a, { prop: pr.name })} />; })}
         </div>
       )}
@@ -530,7 +796,6 @@ function FireTab(p) {
   var resPct = d.reserveGoal > 0 ? Math.min(d.reserve / d.reserveGoal * 100, 100) : 0;
 
   var fields = [
-    { k: "salary", l: "Salario neto" },
     { k: "invest", l: "Inversión mensual" },
     { k: "portfolio", l: "Cartera actual" },
     { k: "target", l: "Objetivo pasivo mensual" },
@@ -567,10 +832,10 @@ function FireTab(p) {
 
       <div style={Object.assign({}, st.card, { background: "#0f1520", border: "1px solid #1e3a5f" })}>
         <div style={{ fontSize: 13, fontWeight: 600, color: "#93c5fd", marginBottom: 6 }}>💳 Flujo integrado mensual</div>
-        <FRow l="Ingresos personales" v={cx.bInc} c="#4ade80" />
-        <FRow l="Rentas netas" v={cx.rentalFCL} c={cx.rentalFCL >= 0 ? "#34d399" : "#f87171"} />
+        <FRow l="Ingresos Juanma (incl. alquileres)" v={cx.incJuanma} c={cx.incJuanma >= 0 ? "#4ade80" : "#f87171"} />
+        <FRow l="Ingresos Amanda" v={cx.incAmanda} c="#34d399" />
         <div style={{ borderTop: "1px solid #1e3a5f", margin: "4px 0" }} />
-        <FRow l="Total ingreso" v={cx.bInc + cx.rentalFCL} c="#4ade80" bold={true} />
+        <FRow l="Total ingreso hogar" v={cx.bInc} c="#4ade80" bold={true} />
         <FRow l="Gastos personales" v={-cx.bExp} c="#f87171" />
         <FRow l="Inversión" v={-d.fire.invest} c="#60a5fa" />
         <div style={{ borderTop: "2px solid #1e3a5f", margin: "4px 0" }} />
@@ -807,6 +1072,7 @@ function Kpi(p) {
 }
 
 function PropMini(p) {
+  var ph = PHASES.find(function (x) { return x.id === p.phase; }) || PHASES[0];
   var bw = p.c.income > 0 ? Math.min(p.c.exp / p.c.income * 100, 100) : 0;
   return (
     <div style={st.propC}>
@@ -814,8 +1080,8 @@ function PropMini(p) {
         <span style={{ fontSize: 18 }}>{p.ic}</span>
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#e5e7eb" }}>{p.name}</div>
-          <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 6, fontWeight: 600, background: p.active ? "#065f46" : "#78350f", color: p.active ? "#6ee7b7" : "#fcd34d" }}>
-            {p.active ? "Activo" : "Pend."}
+          <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 6, fontWeight: 600, background: ph.bg, color: ph.fg }}>
+            {ph.label}
           </span>
         </div>
       </div>
@@ -861,6 +1127,7 @@ var st = {
   main: { padding: 10, paddingBottom: 40 },
   card: { background: "#161920", borderRadius: 10, padding: 12, border: "1px solid #1f2937" },
   secT: { fontSize: 13, fontWeight: 600, color: "#d1d5db", marginBottom: 4 },
+  blockT: { fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 },
   col: { display: "flex", flexDirection: "column", gap: 10 },
   kpiRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 },
   kpiCard: { background: "#161920", borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 1, border: "1px solid #1f2937" },
@@ -869,6 +1136,6 @@ var st = {
   edVal: { color: "#93c5fd", fontSize: 12, cursor: "pointer", fontFamily: "monospace", padding: "3px 6px", borderRadius: 6, background: "#1a1d24", whiteSpace: "nowrap" },
   inp: { padding: "5px 7px", borderRadius: 6, border: "1px solid #374151", background: "#0f1117", color: "#e5e7eb", fontSize: 12, fontFamily: "monospace", outline: "none", boxSizing: "border-box" },
   miniBtn: { padding: "3px 8px", borderRadius: 5, border: "none", background: "#166534", color: "#86efac", cursor: "pointer", fontSize: 12 },
-  addBtn: { padding: "3px 10px", borderRadius: 7, border: "1px solid #374151", background: "#1f2937", color: "#d1d5db", cursor: "pointer", fontSize: 15, lineHeight: "1" },
+  addBtn: { padding: "3px 10px", borderRadius: 7, border: "1px solid #374151", background: "#1f2937", color: "#d1d5db", cursor: "pointer", fontSize: 13, lineHeight: "1.4" },
   smBtn: { padding: "4px 10px", borderRadius: 7, border: "1px solid #374151", background: "#1a1d24", color: "#d1d5db", cursor: "pointer", fontSize: 11 },
 };
