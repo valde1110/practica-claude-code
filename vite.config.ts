@@ -2,7 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
+// GitHub Pages serves this project under /practica-claude-code/, not the domain root.
+const base = "/practica-claude-code/";
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     VitePWA({
@@ -16,8 +20,8 @@ export default defineConfig({
         background_color: "#0f1117",
         display: "standalone",
         orientation: "portrait",
-        start_url: "/",
-        scope: "/",
+        start_url: base,
+        scope: base,
         icons: [
           { src: "icons/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" },
