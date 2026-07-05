@@ -7,7 +7,8 @@ import { byCategory } from "../calc/budget";
 import { EXP_CATS, INC_CATS } from "../data/categories";
 import { AddForm, type ItemFormState } from "../components/shared/AddForm";
 import { BRow } from "../components/shared/BRow";
-import type { AppState } from "../types/models";
+import { ImportExpensesDialog } from "../components/shared/ImportExpensesDialog";
+import type { AppState, BudgetItem } from "../types/models";
 import type { AppContext } from "../types/context";
 import type { SaveFn } from "../hooks/useAppData";
 
@@ -20,6 +21,12 @@ interface BudgetTabProps {
 export function BudgetTab({ data, save, cx }: BudgetTabProps) {
   const [adding, setAdding] = useState<"inc" | "exp" | null>(null);
   const [form, setForm] = useState<ItemFormState>({ label: "", amt: "", cat: "" });
+  const [importing, setImporting] = useState(false);
+
+  function addImportedExpenses(items: BudgetItem[]) {
+    if (items.length === 0) return;
+    save((d) => ({ ...d, expenses: [...d.expenses, ...items] }));
+  }
 
   function addItem(type: "inc" | "exp") {
     if (!form.label || !form.amt) return;
@@ -106,9 +113,14 @@ export function BudgetTab({ data, save, cx }: BudgetTabProps) {
       <div style={st.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <div style={st.secT}>Gastos mensuales</div>
-          <button onClick={() => setAdding(adding === "exp" ? null : "exp")} style={st.addBtn}>
-            {adding === "exp" ? "✕" : "+"}
-          </button>
+          <div style={{ display: "flex", gap: 5 }}>
+            <button onClick={() => setImporting(true)} style={st.addBtn} title="Importar desde una foto">
+              📷
+            </button>
+            <button onClick={() => setAdding(adding === "exp" ? null : "exp")} style={st.addBtn}>
+              {adding === "exp" ? "✕" : "+"}
+            </button>
+          </div>
         </div>
         {adding === "exp" && <AddForm form={form} setForm={setForm} onAdd={() => addItem("exp")} cats={EXP_CATS} />}
         {data.expenses.length === 0 && adding !== "exp" && (
@@ -132,6 +144,12 @@ export function BudgetTab({ data, save, cx }: BudgetTabProps) {
           </strong>
         </p>
       </div>
+
+      <ImportExpensesDialog
+        open={importing}
+        onClose={() => setImporting(false)}
+        onConfirm={addImportedExpenses}
+      />
     </div>
   );
 }

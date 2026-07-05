@@ -30,6 +30,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,ico}"],
+        // OCR assets (~13MB) are fetched lazily only when the photo-import feature is used,
+        // and tesseract.js caches them itself — keep them out of the app-shell precache.
+        globIgnores: ["tesseract/**", "tesseract-core/**", "tessdata/**"],
       },
     }),
   ],
