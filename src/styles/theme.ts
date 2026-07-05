@@ -1,0 +1,32 @@
+export const theme = {
+  bg: "#0f1117",
+  bgCard: "#161920",
+  bgSubtle: "#1a1d24",
+  bgInfo: "#0f1520",
+  border: "#1f2937",
+  borderSubtle: "#2a2d35",
+  borderInfo: "#1e3a5f",
+
+  textPrimary: "#e5e7eb",
+  textSecondary: "#d1d5db",
+  textMuted: "#9ca3af",
+  textFaint: "#6b7280",
+  textDim: "#4b5563",
+
+  success: "#4ade80",
+  successBg: "#065f46",
+  successText: "#6ee7b7",
+  danger: "#f87171",
+  dangerBg: "#7f1d1d",
+  dangerText: "#fca5a5",
+  warning: "#fbbf24",
+  warningBg: "#78350f",
+  warningText: "#fcd34d",
+  info: "#93c5fd",
+  accentBlue: "#60a5fa",
+  accentTeal: "#0d9488",
+  accentIndigo: "#2563eb",
+
+  fontMono: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+  fontSans: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+} as const;
