@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { ALLOWED_EXTENSIONS } from "../lib/validateAudio";
+import { VIDEO_EXTENSIONS } from "../lib/validateMedia";
 
 interface FileUploaderProps {
   onFileSelected: (file: File) => void;
@@ -31,13 +32,21 @@ export function FileUploader({ onFileSelected, autoOpenToken, disabled }: FileUp
         onClick={() => inputRef.current?.click()}
         disabled={disabled}
       >
-        Subir archivo de audio
+        Subir audio o vídeo
       </button>
-      <p className="uploader-hint">Formatos: {ALLOWED_EXTENSIONS.join(", ")} · máx. 25 MB</p>
+      <p className="uploader-hint">
+        Audio: {ALLOWED_EXTENSIONS.join(", ")} (máx. 25 MB) · Vídeo: {VIDEO_EXTENSIONS.join(", ")} (cualquier
+        duración, se extrae el audio en el propio dispositivo)
+      </p>
       <input
         ref={inputRef}
         type="file"
-        accept="audio/*,.mp3,.m4a,.wav,.ogg,.opus,.webm"
+        accept={[
+          "audio/*",
+          "video/*",
+          ...ALLOWED_EXTENSIONS.map((ext) => `.${ext}`),
+          ...VIDEO_EXTENSIONS.map((ext) => `.${ext}`),
+        ].join(",")}
         className="uploader-input"
         onChange={handleChange}
       />

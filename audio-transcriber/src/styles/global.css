@@ -232,3 +232,100 @@ body {
   cursor: pointer;
   padding: 0 4px;
 }
+
+.history-toggle {
+  margin-top: 10px;
+  font-size: 0.85rem;
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progress-label {
+  margin: 0;
+  text-align: center;
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel-alt);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.history-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--panel-alt);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.history-item--error {
+  border-color: var(--danger);
+}
+
+.history-item-name {
+  margin: 0;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.history-item-meta {
+  margin: 4px 0 0;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+.history-item-error {
+  margin: 4px 0 0;
+  color: #fecaca;
+  font-size: 0.8rem;
+}
+
+.history-item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
