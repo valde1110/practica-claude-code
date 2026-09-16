@@ -11,6 +11,12 @@ export default defineConfig({
       filename: "sw.ts",
       injectManifest: {
         globPatterns: ["**/*.{js,css,html,svg,png,ico}"],
+        // ffmpeg.wasm's core (~32 MB) is fetched lazily only when someone
+        // uploads a video, and the browser HTTP cache (plus the long
+        // Cache-Control set in netlify.toml) keeps it around after that -
+        // keep it out of the app-shell precache so installing the PWA
+        // doesn't force everyone to download it upfront.
+        globIgnores: ["ffmpeg-core/**"],
       },
       injectRegister: "auto",
       registerType: "autoUpdate",
