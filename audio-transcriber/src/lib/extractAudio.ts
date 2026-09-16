@@ -29,19 +29,29 @@ export async function extractAudioChunks(
   file: File,
   onProgress?: (progress: ExtractionProgress) => void,
 ): Promise<Blob[]> {
+  const t0 = performance.now();
+  console.debug("[extractAudio] getFFmpeg() start");
   const ffmpeg = await getFFmpeg((ratio) => onProgress?.({ stage: "loading", ratio }));
+  console.debug(`[extractAudio] getFFmpeg() resolved at +${Math.round(performance.now() - t0)}ms`);
+
+  const handleLog = ({ message }: { message: string }) => console.debug("[ffmpeg-log]", message);
+  ffmpeg.on("log", handleLog);
 
   const inputName = `input-${Date.now()}.${extensionOf(file.name)}`;
   const outputPattern = "chunk_%03d.ogg";
 
+  console.debug(`[extractAudio] writeFile start (${file.size} bytes)`);
   await ffmpeg.writeFile(inputName, await fetchFile(file));
+  console.debug(`[extractAudio] writeFile done at +${Math.round(performance.now() - t0)}ms`);
 
   const handleProgress = ({ progress }: { progress: number }) => {
+    console.debug(`[extractAudio] progress event: ${progress}`);
     onProgress?.({ stage: "extracting", ratio: Math.min(Math.max(progress, 0), 1) });
   };
   ffmpeg.on("progress", handleProgress);
 
   try {
+    console.debug(`[extractAudio] exec start at +${Math.round(performance.now() - t0)}ms`);
     await ffmpeg.exec([
       "-i",
       inputName,
@@ -64,7 +74,9 @@ export async function extractAudioChunks(
     ]);
   } finally {
     ffmpeg.off("progress", handleProgress);
+    ffmpeg.off("log", handleLog);
   }
+  console.debug(`[extractAudio] exec done at +${Math.round(performance.now() - t0)}ms`);
 
   const entries = await ffmpeg.listDir("/");
   const chunkNames = entries
