@@ -1,9 +1,9 @@
 # Voz a Texto
 
-PWA en español para transcribir notas de voz y archivos de audio a texto,
-usando la API de Groq (`whisper-large-v3-turbo`). Pensada para instalarse
-en Android y recibir audios compartidos directamente desde WhatsApp y otras
-apps.
+PWA en español para transcribir notas de voz, audios y **vídeos completos**
+(de cualquier duración) a texto, usando la API de Groq
+(`whisper-large-v3-turbo`). Pensada para instalarse en Android y recibir
+audios compartidos directamente desde WhatsApp y otras apps.
 
 ## Stack
 
@@ -18,6 +18,29 @@ Functions clásicas de Netlify (basadas en AWS Lambda) limitan el cuerpo de
 la petición a 6 MB, mientras que las Edge Functions admiten hasta 25 MB,
 que es justo el límite de tamaño de archivo de la API de Groq.
 
+## Vídeos y audios largos (sin límite de duración)
+
+Un audio o vídeo de más de 25 MB (o cualquier vídeo, sea del tamaño que
+sea) no se sube tal cual: el navegador extrae primero solo la pista de
+audio con **ffmpeg.wasm** (autohospedado en `public/ffmpeg-core/`, se
+descarga solo la primera vez que hace falta, no en el arranque de la app),
+la comprime a mono/16 kHz/opus y la trocea en partes de ~15 minutos. Cada
+parte se transcribe con una llamada normal a `/api/transcribe` (la función
+no cambia) y el texto se va uniendo en orden. El progreso de cada trabajo
+se guarda en IndexedDB (`src/lib/history.ts`) a medida que se completa cada
+parte, así que si se cierra la pestaña a mitad de un vídeo largo, al volver
+a abrir la app aparece en el nuevo panel **Historial** con un botón
+"Reanudar" que continúa solo por las partes que faltaban, sin repetir las
+ya transcritas. También queda ahí el historial de las transcripciones
+cortas normales.
+
+Importante: `ffmpeg.wasm` necesita ejecutarse dentro de un **worker de
+tipo módulo ES** (así lo crea `@ffmpeg/ffmpeg`), así que hay que
+autohospedar el build **`esm`** de `@ffmpeg/core` (no el `umd`) en
+`public/ffmpeg-core/` — el build `umd` usa `importScripts()`, que los
+navegadores prohíben dentro de un worker de módulo y falla la carga sin
+avisar claramente por qué.
+
 ## Estructura
 
 ```
@@ -28,11 +51,18 @@ audio-transcriber/
 │   └── lib/transcribe-logic.ts   # lógica pura, testeada con Vitest
 ├── src/
 │   ├── App.tsx                   # pantalla principal
-│   ├── components/                # RecordButton, FileUploader, TranscriptResult, ErrorBanner
+│   ├── components/                # RecordButton, FileUploader, TranscriptResult, ErrorBanner,
+│   │                               # ProgressBar, HistoryPanel
 │   ├── hooks/useRecorder.ts       # MediaRecorder + temporizador
-│   ├── lib/                       # validación, cliente de la API, share target
+│   ├── lib/
+│   │   ├── ffmpeg.ts               # carga perezosa de ffmpeg.wasm (build ESM)
+│   │   ├── extractAudio.ts         # extrae y trocea el audio de un vídeo/audio largo
+│   │   ├── transcribeJob.ts        # orquesta la transcripción por partes + reanudación
+│   │   ├── history.ts              # historial persistente en IndexedDB
+│   │   └── validateMedia.ts, validateAudio.ts, transcribeApi.ts, shareTarget.ts
 │   └── sw.ts                      # service worker: precache + captura del share_target
-└── public/icons/                  # iconos de la PWA (incluye variante maskable)
+├── public/icons/                  # iconos de la PWA (incluye variante maskable)
+└── public/ffmpeg-core/            # ffmpeg.wasm autohospedado (build ESM, ~32 MB)
 ```
 
 ## Desarrollo local
@@ -79,9 +109,13 @@ Cubre:
 - Validación de archivos en el cliente y el wrapper `transcribeAudio`
   (`src/lib/*.test.ts`).
 
-Además, el flujo completo (grabar/subir → transcribir → copiar/descargar,
-errores, y la captura del `share_target` por el service worker) se verificó
-manualmente con Playwright contra `vite build && vite preview`.
+Además, el flujo completo se verificó manualmente con Playwright (Chromium
+real) contra `vite build && vite preview`: grabar/subir → transcribir →
+copiar/descargar, errores, la captura del `share_target` por el service
+worker, y el pipeline de vídeo largo de punta a punta — incluyendo un
+vídeo de ~17 min real procesado por ffmpeg.wasm (a ~200x tiempo real),
+troceado en 2 partes, con una parte fallando a propósito y reanudada
+después desde el Historial sin repetir la parte ya transcrita.
 
 ## Desplegar en Netlify
 
