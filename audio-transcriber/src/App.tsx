@@ -227,9 +227,11 @@ export default function App() {
             {stage === "processing-job" && jobProgress && (
               <ProgressBar
                 label={
-                  jobProgress.stage === "extracting"
-                    ? "Extrayendo audio"
-                    : `Transcribiendo parte ${Math.min((jobProgress.chunkIndex ?? 0) + 1, jobProgress.chunkTotal ?? 1)} de ${jobProgress.chunkTotal ?? 1}`
+                  jobProgress.stage === "loading"
+                    ? "Preparando el conversor de audio"
+                    : jobProgress.stage === "extracting"
+                      ? "Extrayendo audio"
+                      : `Transcribiendo parte ${Math.min((jobProgress.chunkIndex ?? 0) + 1, jobProgress.chunkTotal ?? 1)} de ${jobProgress.chunkTotal ?? 1}`
                 }
                 ratio={jobProgress.ratio}
               />

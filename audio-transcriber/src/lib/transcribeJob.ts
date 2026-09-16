@@ -2,7 +2,7 @@ import { extractAudioChunks } from "./extractAudio";
 import { transcribeAudio } from "./transcribeApi";
 import { createJob, finalizeJob, getJob, saveJob, type TranscriptionJob } from "./history";
 
-export type JobRunStage = "extracting" | "transcribing";
+export type JobRunStage = "loading" | "extracting" | "transcribing";
 
 export interface JobRunProgress {
   stage: JobRunStage;
@@ -18,7 +18,7 @@ export interface JobRunCallbacks {
 /** Extracts + chunks a video (or oversized audio) file, saves it as a new job, and transcribes it. */
 export async function startJob(file: File, callbacks: JobRunCallbacks = {}): Promise<TranscriptionJob> {
   const chunks = await extractAudioChunks(file, (p) => {
-    callbacks.onProgress?.({ stage: "extracting", ratio: p.ratio });
+    callbacks.onProgress?.({ stage: p.stage, ratio: p.ratio });
   });
   const job = await createJob(file.name, chunks);
   return processJob(job.id, callbacks);

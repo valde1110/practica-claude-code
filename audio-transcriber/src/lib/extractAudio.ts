@@ -30,9 +30,11 @@ export async function extractAudioChunks(
   onProgress?: (progress: ExtractionProgress) => void,
 ): Promise<Blob[]> {
   const t0 = performance.now();
+  onProgress?.({ stage: "loading", ratio: 0 });
   console.debug("[extractAudio] getFFmpeg() start");
-  const ffmpeg = await getFFmpeg((ratio) => onProgress?.({ stage: "loading", ratio }));
+  const ffmpeg = await getFFmpeg();
   console.debug(`[extractAudio] getFFmpeg() resolved at +${Math.round(performance.now() - t0)}ms`);
+  onProgress?.({ stage: "loading", ratio: 1 });
 
   const handleLog = ({ message }: { message: string }) => console.debug("[ffmpeg-log]", message);
   ffmpeg.on("log", handleLog);
