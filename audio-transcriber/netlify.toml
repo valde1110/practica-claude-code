@@ -6,6 +6,10 @@
   path = "/api/transcribe"
   function = "transcribe"
 
+[[edge_functions]]
+  path = "/api/fetch-url"
+  function = "fetch-media"
+
 [[headers]]
   for = "/sw.js"
   [headers.values]

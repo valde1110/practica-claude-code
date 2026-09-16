@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { RecordButton } from "./components/RecordButton";
 import { FileUploader } from "./components/FileUploader";
+import { UrlInput } from "./components/UrlInput";
 import { TranscriptResult } from "./components/TranscriptResult";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { ProgressBar } from "./components/ProgressBar";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { useRecorder } from "./hooks/useRecorder";
 import { transcribeAudio } from "./lib/transcribeApi";
+import { fetchMediaFromUrl } from "./lib/fetchFromUrl";
 import { validateMediaFile, needsJobPipeline } from "./lib/validateMedia";
 import { startJob, processJob, type JobRunProgress } from "./lib/transcribeJob";
 import { listJobs, saveSimpleResult, deleteJob, type TranscriptionJob } from "./lib/history";
@@ -23,6 +25,7 @@ export default function App() {
   const [jobProgress, setJobProgress] = useState<JobRunProgress | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [jobs, setJobs] = useState<TranscriptionJob[]>([]);
+  const [downloadingUrl, setDownloadingUrl] = useState(false);
 
   const refreshJobs = useCallback(async () => {
     setJobs(await listJobs());
@@ -90,6 +93,29 @@ export default function App() {
       }
     },
     [runJobTranscription, runSimpleTranscription],
+  );
+
+  const handleUrlSubmit = useCallback(
+    async (url: string) => {
+      setErrorMessage(null);
+
+      if (!navigator.onLine) {
+        setErrorMessage("Sin conexión a internet. Conéctate e inténtalo de nuevo.");
+        return;
+      }
+
+      setDownloadingUrl(true);
+      const result = await fetchMediaFromUrl(url);
+      setDownloadingUrl(false);
+
+      if (!result.ok) {
+        setErrorMessage(result.message);
+        return;
+      }
+
+      await runTranscription(result.file);
+    },
+    [runTranscription],
   );
 
   const handleResumeJob = useCallback(
@@ -176,7 +202,8 @@ export default function App() {
     if (recorder.error) setErrorMessage(recorder.error);
   }, [recorder.error]);
 
-  const busy = stage === "transcribing" || stage === "processing-job" || recorder.status === "recording";
+  const busy =
+    stage === "transcribing" || stage === "processing-job" || recorder.status === "recording" || downloadingUrl;
 
   return (
     <div className="app">
@@ -217,6 +244,18 @@ export default function App() {
             </div>
 
             <FileUploader onFileSelected={(file) => void runTranscription(file)} autoOpenToken={uploadToken} disabled={busy} />
+
+            <div className="divider">
+              <span>o</span>
+            </div>
+
+            <UrlInput onSubmit={(url) => void handleUrlSubmit(url)} disabled={busy} />
+
+            {downloadingUrl && (
+              <p className="status-line" aria-live="polite">
+                Descargando desde la URL…
+              </p>
+            )}
 
             {stage === "transcribing" && (
               <p className="status-line" aria-live="polite">
