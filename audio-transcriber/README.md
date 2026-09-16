@@ -41,24 +41,42 @@ autohospedar el build **`esm`** de `@ffmpeg/core` (no el `umd`) en
 navegadores prohíben dentro de un worker de módulo y falla la carga sin
 avisar claramente por qué.
 
+## Transcribir desde una URL
+
+También se puede pegar el enlace directo a un archivo de audio o vídeo
+(por ejemplo, un episodio de podcast alojado en algún sitio) en vez de
+subirlo. Una Edge Function (`/api/fetch-url`) lo descarga en el servidor
+—necesario porque casi ningún host manda cabeceras CORS permisivas para
+descargarlo directamente desde el navegador— y se lo pasa al cliente,
+que sigue el mismo camino de siempre (transcripción simple o por partes
+según el tamaño). Solo vale para **enlaces directos al archivo**, no
+para páginas como YouTube (eso necesitaría extraer el vídeo real de la
+página, algo mucho más complejo, fragil, y en una zona legal gris por
+los términos de uso de YouTube — se descartó a propósito). El límite es
+de 20 MB, el máximo que permite una respuesta en streaming de Netlify;
+la función valida que la URL sea `http`/`https` y bloquea IPs privadas o
+de loopback para evitar SSRF.
+
 ## Estructura
 
 ```
 audio-transcriber/
-├── netlify.toml                  # base dir, ruta de la edge function
+├── netlify.toml                  # base dir, rutas de las edge functions
 ├── netlify/edge-functions/
 │   ├── transcribe.ts             # entrypoint (lee GROQ_API_KEY, expone /api/transcribe)
-│   └── lib/transcribe-logic.ts   # lógica pura, testeada con Vitest
+│   ├── fetch-media.ts            # entrypoint de /api/fetch-url
+│   └── lib/                      # lógica pura de ambas, testeada con Vitest
 ├── src/
 │   ├── App.tsx                   # pantalla principal
-│   ├── components/                # RecordButton, FileUploader, TranscriptResult, ErrorBanner,
-│   │                               # ProgressBar, HistoryPanel
+│   ├── components/                # RecordButton, FileUploader, UrlInput, TranscriptResult,
+│   │                               # ErrorBanner, ProgressBar, HistoryPanel
 │   ├── hooks/useRecorder.ts       # MediaRecorder + temporizador
 │   ├── lib/
 │   │   ├── ffmpeg.ts               # carga perezosa de ffmpeg.wasm (build ESM)
 │   │   ├── extractAudio.ts         # extrae y trocea el audio de un vídeo/audio largo
 │   │   ├── transcribeJob.ts        # orquesta la transcripción por partes + reanudación
 │   │   ├── history.ts              # historial persistente en IndexedDB
+│   │   ├── fetchFromUrl.ts         # cliente de /api/fetch-url
 │   │   └── validateMedia.ts, validateAudio.ts, transcribeApi.ts, shareTarget.ts
 │   └── sw.ts                      # service worker: precache + captura del share_target
 ├── public/icons/                  # iconos de la PWA (incluye variante maskable)
@@ -106,8 +124,12 @@ Cubre:
   método no permitido, falta de `GROQ_API_KEY`, archivo ausente, límite de
   25 MB, formatos no válidos, y el mapeo de errores de Groq (429, 401, caída
   de red, respuesta sin texto) a mensajes en español.
-- Validación de archivos en el cliente y el wrapper `transcribeAudio`
-  (`src/lib/*.test.ts`).
+- La lógica de `/api/fetch-url` (`netlify/edge-functions/lib/fetch-media-logic.test.ts`):
+  URLs inválidas, bloqueo de hosts privados/loopback/link-local (SSRF),
+  límite de 20 MB (por cabecera y también si el servidor miente sobre el
+  tamaño), y el streaming del cuerpo con el `Content-Type`/nombre correctos.
+- Validación de archivos en el cliente, el wrapper `transcribeAudio` y el
+  cliente de `/api/fetch-url` (`src/lib/*.test.ts`).
 
 Además, el flujo completo se verificó manualmente con Playwright (Chromium
 real) contra `vite build && vite preview`: grabar/subir → transcribir →
